@@ -15,8 +15,8 @@
 
 ## แบบ As-Is
 
-![As-Is](.\As-Is.png)
+![As-Is](./As-Is.png)
 
 ## แบบ To-Be
 
-![To-Be](.\To-Be.png)
+![To-Be](./To-Be.png)
