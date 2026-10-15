@@ -1,90 +1,85 @@
-# สถาปัตยกรรมระบบร้านกาแฟ (Week 11 Workshop)
+# wk11-architecture.md
+# RUOK Cafe System — Architectur
 
-## 1. Physical View
+## 1. Physical View (Deployment View)
+
+แผนภาพนี้แสดงการเชื่อมต่อระหว่างเครื่องผู้ใช้ แอปพลิเคชัน Node.js/Express และฐานข้อมูลของระบบ RUOK Cafe System โดยอิงจากโครงสร้าง repository ที่เห็นในโปรเจกต์ ได้แก่ `src/app.js`, `src/config/db.js` และไฟล์ `schema.sql`
 
 ```mermaid
 flowchart TB
-    subgraph Client["Client Side"]
-        Browser["Web Browser"]
+    Client["Client Device<br/>Web Browser"]
+
+    subgraph AppHost["Application Host"]
+        App["Node.js / Express<br/>src/app.js"]
+        Routes["Express Routes<br/>src/routes/"]
+        Controllers["Controllers<br/>src/controllers/"]
+        Models["Data-access Models<br/>src/models/"]
+        DBConfig["Database Connection<br/>src/config/db.js"]
+
+        App --> Routes
+        Routes --> Controllers
+        Controllers --> Models
+        Models --> DBConfig
     end
 
-    subgraph Application["Application Side"]
-        Express["Node.js + Express"]
-        Port["HTTP Port 3000"]
-    end
+    Database[("Cafe Database<br/>schema.sql")]
 
-    subgraph Database["Database Side"]
-        MySQL["MySQL Database Server"]
-        CafeDB[("Database: cafe_pos")]
-    end
-
-    Browser -->|"HTTP Request"| Port
-    Port --> Express
-    Express -->|"HTTP Response"| Port
-    Port --> Browser
-
-    Express -->|"SQL Query"| MySQL
-    MySQL -->|"Query Result"| Express
-    MySQL --> CafeDB
+    Client <-->|"HTTP Request / Response"| App
+    DBConfig <-->|"SQL Query / Result"| Database
 ```
 
-Client Device: เป็นเครื่องที่ผู้ใช้เปิด Web Browser เพื่อเข้าใช้งานระบบ
+- **Client Device:** ผู้ใช้เข้าถึงระบบผ่าน Web Browser
+- **Application Host:** รันแอป Node.js/Express และมี Routes, Controllers, Models และการตั้งค่าการเชื่อมต่อฐานข้อมูลอยู่ใน repository เดียวกัน
+- **Database:** จัดเก็บข้อมูลตาม schema ที่กำหนดใน `schema.sql`
+- ภาพนี้เป็น logical deployment overview ไม่ได้ยืนยันว่าแอปและฐานข้อมูลอยู่คนละเครื่อง หากใช้งานบนเครื่องเดียว ให้ถือว่าองค์ประกอบเหล่านี้ทำงานบนเครื่องเดียวกันได้
 
-Application Server: ใช้ Node.js และ Express รับคำขอจาก Browser ผ่าน Port 3000 แล้วประมวลผลตามการทำงานของระบบ
+## 2. Development View (Component / Module Decomposition)
 
-Database Server: ใช้ MySQL ฐานข้อมูล cafe_pos สำหรับจัดเก็บและเรียกใช้ข้อมูล โดยฝั่งแอปพลิเคชันเชื่อมต่อผ่าน mysql2 Connection Pool ตามข้อมูลในเอกสารเดิม
+เลือกแนวทาง **(ก) — แยก Data-access Model แล้ว** เพราะ repository มีไฟล์ Model แยกจาก Controller และใน `src/models/branchModel.js` มีการ import `../config/db` และเรียก `db.query(...)` ภายใน Model โดยตรง
 
-## 2. Development View (การแบ่ง Component/Module)
-
-โครงสร้างโฟลเดอร์ใน `src/` ที่ตรวจกับ repo จริงของกลุ่ม: `routes/`, `controllers/`, `models/`, `config/db.js`
-
-**เวอร์ชันที่ใช้: (ก) กลุ่มที่แยก Data-access Model แล้ว** (`models/` มีทั้ง `Order.js` และ `orderModel.js`/`menuModel.js`)
+อย่างไรก็ตาม จากโครงสร้างไฟล์ที่เห็น **ไม่พบ `Order.js` ซึ่งเป็น Domain Class ตามตัวอย่างในโจทย์ wk11** ดังนั้นแผนภาพนี้จะแสดงเฉพาะไฟล์และส่วนประกอบที่ตรวจสอบพบจริง ไม่เพิ่มกล่อง `Order.js` ขึ้นมาเอง
 
 ```mermaid
-flowchart TD
-    Routes["Routes Layer<br/>src/routes/*"]
-    Controllers["Controller Layer<br/>src/controllers/*"]
-    Domain["Domain Class<br/>src/models/Order.js<br/>(Order, OrderItem, calculateTotal)"]
-    DataModel["Data-access Model<br/>src/models/orderModel.js<br/>src/models/menuModel.js"]
-    Config["Config<br/>src/config/db.js"]
-    MySQL[("MySQL")]
+flowchart TB
+    subgraph SRC["RUOK Cafe System — src/"]
+        App["app.js<br/>Application Entry"]
+        Routes["Routes Layer<br/>menuRoutes.js<br/>orderRoutes.js<br/>reportRoutes.js"]
 
-    Routes --> Controllers
-    Controllers --> Domain
-    Controllers --> DataModel
-    DataModel --> Config
-    Config --> MySQL
+        Controllers["Controllers Layer<br/>menuController.js<br/>orderController.js<br/>reportController.js"]
+
+        subgraph Models["Data-access Model Layer — models/"]
+            BranchModel["branchModel.js"]
+            CategoryModel["categoryModel.js"]
+            EmployeeModel["employeeModel.js"]
+            MenuModel["menuModel.js"]
+            OrderModel["orderModel.js"]
+            OrderItemModel["orderItemModel.js"]
+            StockModel["stockMovementModel.js"]
+        end
+
+        DBConfig["Database Configuration<br/>config/db.js"]
+
+        App --> Routes
+        Routes --> Controllers
+        Controllers --> Models
+        Models --> DBConfig
+    end
+
+    Database[("Database<br/>schema.sql")]
+    DBConfig <-->|"SQL Query / Result"| Database
 ```
 
-<!--
-สลับเป็นเวอร์ชัน (ข) ถ้ากลุ่มยังไม่ได้แยก Data-access Model
-(Controller เรียก db.query ตรง แต่มี Order.js ตาม wk06)
-ให้ลบ diagram (ก) ด้านบน แล้วใช้ diagram นี้แทน:
+### หน้าที่ของแต่ละส่วน
 
-```mermaid
-flowchart TD
-    Routes["Routes Layer<br/>src/routes/*"]
-    Controllers["Controller Layer<br/>src/controllers/*"]
-    Domain["Domain Class<br/>src/models/Order.js<br/>(Order, OrderItem, calculateTotal)"]
-    Config["Config<br/>src/config/db.js"]
-    MySQL[("MySQL")]
-
-    Routes --> Controllers
-    Controllers --> Domain
-    Controllers -->|"db.query(...)"| Config
-    Config --> MySQL
-```
-
-**ข้อจำกัดที่ทราบ (Known Limitation):** endpoint `createOrder` ยังไม่มี database transaction ครอบ flow การตัดสต็อก ดังนั้นหากขั้นตอนใดล้มเหลวกลางทาง ข้อมูลสต็อกอาจไม่สอดคล้องกับคำสั่งซื้อ diagram นี้จึงไม่ควรถูกตีความว่าการตัดสต็อกปลอดภัยครบถ้วน (ข้อจำกัดนี้เกี่ยวกับ endpoint สั่งซื้อเท่านั้น ไม่เกี่ยวกับ CRUD เมนู)
-
-**ตรวจความสอดคล้องกับ repo:**
-- [ ] ทุกโฟลเดอร์/ไฟล์ใน diagram มีอยู่จริงใน `src/`
-- [ ] ไฟล์ทุกชนิดใน `src/models/` ปรากฏใน diagram ครบ
-- [ ] `src/config/db.js` ตรงกับลูกศรไป MySQL
-- [ ] Physical View ตรงกับจำนวนเครื่องที่ใช้จริง
+- **`app.js`:** จุดเริ่มต้น/การตั้งค่าแอปพลิเคชันตามชื่อไฟล์ใน repository
+- **`src/routes/`:** กำหนดเส้นทางคำขอ เช่น `menuRoutes.js`, `orderRoutes.js` และ `reportRoutes.js`
+- **`src/controllers/`:** จัดการการทำงานของคำขอ เช่น `menuController.js`, `orderController.js` และ `reportController.js`
+- **`src/models/`:** แยกฟังก์ชันเข้าถึงข้อมูลไว้ตามประเภทข้อมูล ได้แก่ Branch, Category, Employee, Menu, Order, Order Item และ Stock Movement
+- **`src/config/db.js`:** จัดเตรียมการเชื่อมต่อฐานข้อมูล ซึ่ง Model ใช้เรียกคำสั่ง SQL
+- **`schema.sql`:** ไฟล์ schema ที่ใช้ประกอบการตรวจสอบโครงสร้างฐานข้อมูล
 
 ## 3. สรุปสถาปัตยกรรม
 
-### 3. สรุปสถาปัตยกรรมของระบบ
+จากโครงสร้าง repository ที่ตรวจสอบได้ ระบบ RUOK Cafe System จัดโค้ดเป็นแอปพลิเคชัน Node.js/Express ภายใน repository เดียว และแบ่งความรับผิดชอบเป็น Routes, Controllers, Data-access Models และ Database Configuration จึงอธิบายรูปแบบการออกแบบได้ว่าเป็น **Monolithic Architecture ที่จัดโครงสร้างภายในแบบ Layered Architecture**: เป็น monolith เพราะองค์ประกอบฝั่งแอปพลิเคชันอยู่ในโปรเจกต์เดียว ไม่ได้แยกเป็นหลาย service ที่ deploy แยกกัน และเป็น layered เพราะแยกไฟล์ routing, controller, data access และ database configuration ออกจากกัน แนวทางนี้เหมาะกับโครงงานขนาดเล็กเพราะเข้าใจและดูแลรักษาง่ายกว่าการเพิ่มความซับซ้อนของ Microservices
 
-กลุ่มเราเลือกใช้สถาปัตยกรรมแบบ Monolithic + Layered โดยใช้ Node.js และ Express สำหรับฝั่งเซิร์ฟเวอร์ และ MySQL ฐานข้อมูล `cafe_pos` ตามข้อมูลที่กำหนดไว้ในเอกสารโครงการ ตั้งแต่สัปดาห์ที่ 5 มีการวางโครงสร้างแบ่งเป็น Routes, Controllers และ Models เพื่อแยกหน้าที่การทำงานให้ชัดเจน โดยใน Repository ที่ตรวจพบมีไฟล์ `model/menuModel.js` สำหรับจัดการข้อมูลเมนู การใช้สถาปัตยกรรมนี้ช่วยให้โครงสร้างเข้าใจง่ายและเหมาะกับการพัฒนาโครงงานของกลุ่ม อย่างไรก็ตาม ไฟล์ของทุก Layer ยังไม่ได้รับการยืนยันว่ามีอยู่ครบใน Repository ปัจจุบัน
+จากภาพหน้าจอ Model แยกการเรียกฐานข้อมูลไว้ในไฟล์ เช่น `branchModel.js` ซึ่ง import `../config/db` และเรียก `db.query(...)` จึงเลือก Development View แบบ **(ก)** ในแง่ที่มี Data-access Model แยกไฟล์ อย่างไรก็ตาม ภาพหน้าจอที่มีอยู่ยังไม่แสดง `Order.js` ซึ่งโจทย์ wk11 ระบุว่าเป็น Domain Class ที่ควรมีตามงานสัปดาห์ 6 จึงควรตรวจสอบไฟล์ดังกล่าวและเพิ่ม/แก้ไขให้สอดคล้องกับสถานะจริงก่อนส่ง โดยไม่วาดให้ดูเหมือนมีไฟล์ที่ไม่มีอยู่จริง
