@@ -7,4 +7,7 @@ module.exports = mysql.createPool({
   database: process.env.DB_NAME || "cafe_system",
   waitForConnections: true,
   connectionLimit: 10,
+  // คืนค่า DECIMAL (ราคา, ยอดขาย) และ SUM() เป็น number แทน string
+  // เพื่อให้ response ตรงกับ openapi.yaml
+  decimalNumbers: true,
 });

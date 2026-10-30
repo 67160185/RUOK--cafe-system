@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RUOK Coffee</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <span class="logo">RUOK COFFEE</span>
+    <nav>
+      <a href="#pos">หน้าหลัก</a>
+      <a href="#menu">จัดการเมนู</a>
+      <a href="#report">รายงานยอดขาย</a>
+    </nav>
+  </header>
+  <main id="view"><p class="mut">กำลังโหลด...</p></main>
+  <dialog id="dlg"></dialog>
+  <div id="toasts"></div>
+  <script>window.RUOK_API_BASE = ""; // ถ้าเปิดหน้าเว็บจากเซิร์ฟเวอร์อื่น ให้ใส่ เช่น "http://localhost:3000" (และตั้ง CORS_ORIGIN ใน backend)</script>
+  <script src="app.js"></script>
+</body>
+</html>

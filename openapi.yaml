@@ -1,0 +1,752 @@
+
+openapi: 3.0.3
+
+info:
+  title: RUOK Cafe System API
+  version: 1.0.0
+  description: |
+    API documentation for RUOK Cafe System.
+    Every error is returned as JSON in the form `{ "message": "..." }`.
+
+servers:
+  - url: /
+    description: This server
+
+tags:
+  - name: System
+  - name: Menu
+  - name: Categories
+  - name: Orders
+  - name: Reports
+  - name: Stock
+
+paths:
+  /:
+    get:
+      tags: [System]
+      summary: Check API server status
+      responses:
+        "200":
+          description: API server is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: RUOK Cafe System API is running
+                  status:
+                    type: string
+                    example: ok
+
+  /api/categories:
+    get:
+      tags: [Categories]
+      summary: Get menu categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      tags: [Categories]
+      summary: Create a menu category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 50
+                  example: เครื่องดื่มเย็น
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  category_id:
+                    type: integer
+                  name:
+                    type: string
+        "400":
+          description: Category name is empty or longer than 50 characters
+        "409":
+          description: A category with this name already exists
+
+  /api/menu:
+    get:
+      tags: [Menu]
+      summary: Get menu items
+      parameters:
+        - name: branch_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by branch ID
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by category ID
+      responses:
+        "200":
+          description: List of menu items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItem"
+        "400":
+          description: Invalid branch_id or category_id query parameter
+    post:
+      tags: [Menu]
+      summary: Create a menu item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branch_id, category_id, name, price]
+              properties:
+                branch_id:
+                  type: integer
+                  example: 1
+                category_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: มอคค่า
+                price:
+                  type: number
+                  example: 60
+                stock_quantity:
+                  type: integer
+                  default: 0
+                  example: 30
+      responses:
+        "201":
+          description: Menu created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Menu created
+                  menu_id:
+                    type: integer
+        "400":
+          description: Invalid menu data, invalid branch_id or category_id, or branch/category not found
+        "409":
+          description: A menu item with this name already exists in this branch
+
+  /api/menu/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Menu]
+      summary: Get a menu item by ID
+      responses:
+        "200":
+          description: Menu item found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+        "400":
+          description: Menu ID must be a positive integer
+        "404":
+          description: Menu not found
+    put:
+      tags: [Menu]
+      summary: Update a menu item
+      description: |
+        Send only the fields that need to be updated. Use the stock movements endpoint to change stock quantity.
+        The branch of a menu item that has already been ordered cannot be changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                branch_id:
+                  type: integer
+                category_id:
+                  type: integer
+                name:
+                  type: string
+                price:
+                  type: number  
+      responses:
+        "200":
+          description: Menu updated
+        "400":
+          description: Invalid menu ID or request data, empty body, unsupported fields, or branch/category not found
+        "404":
+          description: Menu not found
+        "409":
+          description: Duplicate menu name in the branch, or the menu has been ordered and its branch cannot be changed
+    delete:
+      tags: [Menu]
+      summary: Remove a menu item from active menus
+      description: |
+        A menu item that has never been ordered is permanently deleted (its stock history is deleted with it).
+        An ordered menu item is archived instead, preserving sales history while hiding it from active menus and orders.
+      responses:
+        "200":
+          description: Menu deleted or archived
+        "400":
+          description: Menu ID must be a positive integer
+        "404":
+          description: Menu not found
+  /api/orders:
+    get:
+      tags: [Orders]
+      summary: Get orders
+      parameters:
+        - name: branch_id
+          in: query
+          schema:
+            type: integer
+        - name: employee_id
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          description: Filter by order date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    order_id:
+                      type: integer
+                    branch_id:
+                      type: integer
+                    branch_name:
+                      type: string
+                    employee_id:
+                      type: integer
+                    employee_name:
+                      type: string
+                    payment_method:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                    total_price:
+                      type: number
+        "400":
+          description: Invalid branch_id, employee_id or date query parameter
+    post:
+      tags: [Orders]
+      summary: Create an order
+      description: The server gets prices from the menu, deducts stock, and records stock movements automatically. Duplicate menu IDs are combined.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [branch_id, employee_id, payment_method, items]
+              properties:
+                branch_id:
+                  type: integer
+                  example: 1
+                employee_id:
+                  type: integer
+                  example: 1
+                payment_method:
+                  type: string
+                  enum: [cash, qr]
+                  example: cash
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [menu_id, quantity]
+                    properties:
+                      menu_id:
+                        type: integer
+                        example: 1
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        example: 2
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Order created
+                  order_id:
+                    type: integer
+                  total_price:
+                    type: number
+        "400":
+          description: Invalid order data (including a payment_method other than cash or qr), employee/menu not found in branch, or insufficient stock
+
+  /api/orders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Orders]
+      summary: Get an order with its items
+      responses:
+        "200":
+          description: Order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_id:
+                    type: integer
+                  branch_name:
+                    type: string
+                  employee_name:
+                    type: string
+                  total_price:
+                    type: number
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        order_item_id:
+                          type: integer
+                        menu_id:
+                          type: integer
+                        name:
+                          type: string
+                        quantity:
+                          type: integer
+                        unit_price:
+                          type: number
+                        subtotal:
+                          type: number
+        "400":
+          description: Order ID must be a positive integer
+        "404":
+          description: Order not found
+    put:
+      tags: [Orders]
+      summary: Update an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_method:
+                  type: string
+                  enum: [cash, qr]
+                  example: qr
+                employee_id:
+                  type: integer
+                  example: 2
+      responses:
+        "200":
+          description: Order updated
+        "400":
+          description: Invalid order ID or payment_method, no update fields provided, or employee is not in the order's branch
+        "404":
+          description: Order not found
+    delete:
+      tags: [Orders]
+      summary: Delete an order and restore stock
+      description: Deletes the order items and order, restores stock quantities, and records stock movements.
+      responses:
+        "200":
+          description: Order deleted and stock restored
+        "400":
+          description: Order ID must be a positive integer
+        "404":
+          description: Order not found
+
+  /api/reports/summary:
+    get:
+      tags: [Reports]
+      summary: Get sales summary
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "200":
+          description: Overall sales summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesSummary"
+
+  /api/employees:
+    get:
+      tags: [Orders]
+      summary: Get employees
+      parameters:
+        - name: branch_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Optionally filter employees by branch
+      responses:
+        "200":
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [employee_id, branch_id, name, role]
+                  properties:
+                    employee_id:
+                      type: integer
+                    branch_id:
+                      type: integer
+                    name:
+                      type: string
+                    role:
+                      type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/reports/daily-sales:
+    get:
+      tags: [Reports]
+      summary: Get daily sales
+      parameters:
+        - name: date
+          in: query
+          description: Date in YYYY-MM-DD format. Defaults to today. The response always contains the actual date.
+          schema:
+            type: string
+            format: date
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "200":
+          description: Daily sales summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SalesSummary"
+                  - type: object
+                    properties:
+                      date:
+                        type: string
+                        example: "2026-10-28"
+
+  /api/reports/sales-by-branch:
+    get:
+      tags: [Reports]
+      summary: Get sales grouped by branch
+      responses:
+        "200":
+          description: Sales by branch
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    branch_id:
+                      type: integer
+                    branch_name:
+                      type: string
+                    total_orders:
+                      type: integer
+                    total_sales:
+                      type: number
+
+  /api/reports/sales-by-payment:
+    get:
+      tags: [Reports]
+      summary: Get sales grouped by payment method
+      parameters:
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "200":
+          description: Sales by payment method
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    payment_method:
+                      type: string
+                    total_orders:
+                      type: integer
+                    total_sales:
+                      type: number
+
+  /api/reports/top-menu:
+    get:
+      tags: [Reports]
+      summary: Get best-selling menu items
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of results (defaults to 5, capped at 50)
+          schema:
+            type: integer
+            minimum: 1
+            default: 5
+            maximum: 50
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "200":
+          description: Best-selling menu items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    menu_id:
+                      type: integer
+                    name:
+                      type: string
+                    branch_id:
+                      type: integer
+                    total_quantity:
+                      type: integer
+                    total_sales:
+                      type: number
+
+  /api/reports/low-stock:
+    get:
+      tags: [Reports]
+      summary: Get menu items with low stock
+      parameters:
+        - name: threshold
+          in: query
+          description: Stock quantity threshold (defaults to 10). 0 returns only items that are out of stock.
+          schema:
+            type: integer
+            minimum: 0
+            default: 10
+        - $ref: "#/components/parameters/BranchId"
+      responses:
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "200":
+          description: Menu items at or below the stock threshold
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    menu_id:
+                      type: integer
+                    name:
+                      type: string
+                    branch_id:
+                      type: integer
+                    branch_name:
+                      type: string
+                    stock_quantity:
+                      type: integer
+
+  /api/reports/sales:
+    get:
+      tags: [Reports]
+      summary: Get sales per menu item for one branch
+      parameters:
+        - name: branch_id
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Sales per menu item, best-selling first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    menu_id:
+                      type: integer
+                    name:
+                      type: string
+                    total_quantity:
+                      type: integer
+                    total_sales:
+                      type: number
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/stock-movements:
+    post:
+      tags: [Stock]
+      summary: Record a stock movement
+      description: Positive quantity_change adds stock; negative quantity_change removes stock. Stock cannot become negative.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [menu_id, quantity_change]
+              properties:
+                menu_id:
+                  type: integer
+                  minimum: 1
+                  example: 2
+                quantity_change:
+                  type: integer
+                  not:
+                    enum: [0]
+                  example: 5
+      responses:
+        "201":
+          description: Stock movement recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Stock movement recorded
+                  movement_id:
+                    type: integer
+                  menu_id:
+                    type: integer
+                  quantity_change:
+                    type: integer
+                  stock_quantity:
+                    type: integer
+        "400":
+          description: Invalid input, insufficient stock, or the resulting stock would be too large
+        "404":
+          description: Menu not found
+        "500":
+          description: Failed to record stock movement
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: Resource ID
+      schema:
+        type: integer
+        minimum: 1
+    BranchId:
+      name: branch_id
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+
+  responses:
+    BadRequest:
+      description: Invalid query parameter
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: branch_id must be a positive integer
+
+    MenuItem:
+      type: object
+      properties:
+        menu_id:
+          type: integer
+        branch_id:
+          type: integer
+        branch_name:
+          type: string
+        category_id:
+          type: integer
+        category_name:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+          example: 60
+        stock_quantity:
+          type: integer
+
+    Category:
+      type: object
+      properties:
+        category_id:
+          type: integer
+        name:
+          type: string
+
+    SalesSummary:
+      type: object
+      properties:
+        total_orders:
+          type: integer
+        total_items:
+          type: integer
+        total_sales:
+          type: number

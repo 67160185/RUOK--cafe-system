@@ -18,3 +18,10 @@ exports.findByBranch = async (branchId) => {
   );
   return rows;
 };
+
+exports.findAll = async () => {
+  const [rows] = await db.query(
+    `SELECT ${COLUMNS} FROM employee ORDER BY branch_id, name, employee_id`,
+  );
+  return rows;
+};
